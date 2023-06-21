@@ -64,29 +64,45 @@
         var canvas = document.getElementById('renderCanvas');
 var engine = new BABYLON.Engine(canvas, true);
 
-// Create the scene
-var createScene = function () {
+var createScene = function() {
   var scene = new BABYLON.Scene(engine);
 
   // Create a camera
-  var camera = new BABYLON.FreeCamera('camera', new BABYLON.Vector3(0, 5, -10), scene);
+  var camera = new BABYLON.FreeCamera('camera', new BABYLON.Vector3(0, 1.7, 0), scene);
   camera.setTarget(BABYLON.Vector3.Zero());
-  camera.attachControl(canvas, false);
+  camera.attachControl(canvas, true);
 
   // Create a light
   var light = new BABYLON.HemisphericLight('light', new BABYLON.Vector3(0, 1, 0), scene);
+
+  // Create the ground
+  var ground = BABYLON.MeshBuilder.CreateGround('ground', { width: 50, height: 50 }, scene);
+  var groundMaterial = new BABYLON.StandardMaterial('Ground Material', scene);
+  ground.material = groundMaterial;
+  var groundTexture = new BABYLON.Texture('path/to/your/texture.png', scene); // Replace 'path/to/your/texture.png' with the actual path to your texture image
+  ground.material.diffuseTexture = groundTexture;
+  ground.checkCollisions = true;
+
+  // Import the Yeti mesh
+  BABYLON.SceneLoader.ImportMesh('', 'path/to/your/mesh/', 'Yeti.babylon', scene, function(newMeshes) {
+    var yeti = newMeshes[0];
+    yeti.scaling = new BABYLON.Vector3(0.1, 0.1, 0.1);
+    yeti.position.y = 0.5; // Adjust the position of the Yeti mesh to be on the ground
+    yeti.checkCollisions = true;
+  });
 
   // Create an array to store the enemies
   var enemies = [];
 
   // Create the enemy mesh
-  var createEnemy = function () {
+  var createEnemy = function() {
     var enemy = BABYLON.MeshBuilder.CreateBox('enemy', { size: 1 }, scene);
     enemy.position.y = 0.5;
+    enemy.checkCollisions = true;
 
     // Set initial random position
-    enemy.position.x = Math.random() * 8 - 4;
-    enemy.position.z = Math.random() * 8 - 4;
+    enemy.position.x = Math.random() * 40 - 20;
+    enemy.position.z = Math.random() * 40 - 20;
 
     // Set initial random movement direction
     var enemySpeed = 0.02;
@@ -97,12 +113,12 @@ var createScene = function () {
   };
 
   // Create initial enemies
-  for (var i = 0; i < 5; i++) {
+  for (var i = 0; i < 115; i++) {
     enemies.push(createEnemy());
   }
 
   // Animation loop
-  scene.onBeforeRenderObservable.add(function () {
+  scene.onBeforeRenderObservable.add(function() {
     // Move and check collisions for each enemy
     for (var i = 0; i < enemies.length; i++) {
       var enemy = enemies[i];
@@ -130,13 +146,99 @@ var createScene = function () {
       }
 
       // Reverse direction when reaching the boundaries
-      if (enemy.position.x > 4 || enemy.position.x < -4) {
+      if (enemy.position.x > 20 || enemy.position.x < -20) {
         enemy.direction.x *= -1;
       }
 
-      if (enemy.position.z > 4 || enemy.position.z < -4) {
+      if (enemy.position.z > 20 || enemy.position.z < -20) {
         enemy.direction.z *= -1;
       }
+    }
+  });
+
+  // Enable collisions with the ground
+  scene.gravity = new BABYLON.Vector3(0, -0.9, 0);
+  scene.collisionsEnabled = true;
+  camera.checkCollisions = true;
+  camera.applyGravity = true;
+  camera.ellipsoid = new BABYLON.Vector3(1, 1, 1);
+
+  // Keyboard input handling
+  var inputMap = {};
+  scene.actionManager = new BABYLON.ActionManager(scene);
+  scene.actionManager.registerAction(
+    new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, function(evt) {
+      inputMap[evt.sourceEvent.key] = evt.sourceEvent.type === 'keydown';
+    })
+  );
+  scene.actionManager.registerAction(
+    new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, function(evt) {
+      inputMap[evt.sourceEvent.key] = evt.sourceEvent.type === 'keydown';
+    })
+  );
+
+  // Camera movement
+  var jump = false;
+  var jumpPower = 10.05;
+// Mouse movement handling
+var isPointerLocked = false;
+
+canvas.addEventListener("pointerdown", function () {
+  if (!isPointerLocked) {
+    canvas.requestPointerLock();
+  }
+});
+
+canvas.addEventListener("pointermove", function (event) {
+  if (isPointerLocked) {
+    var cameraRotationSpeed = 0.002;
+    camera.rotation.y += event.movementX * cameraRotationSpeed;
+    camera.rotation.x += event.movementY * cameraRotationSpeed;
+  }
+});
+
+document.addEventListener("pointerlockchange", function () {
+  isPointerLocked = document.pointerLockElement === canvas;
+});
+
+  scene.onBeforeRenderObservable.add(function() {
+    var enemySpeed = 0.02;
+
+    if (inputMap['w'] || inputMap['W']) {
+      camera.position.x += camera.getDirection(BABYLON.Axis.Z).x * enemySpeed;
+      camera.position.z += camera.getDirection(BABYLON.Axis.Z).z * enemySpeed;
+    }
+    if (inputMap['s'] || inputMap['S']) {
+      camera.position.x -= camera.getDirection(BABYLON.Axis.Z).x * enemySpeed;
+      camera.position.z -= camera.getDirection(BABYLON.Axis.Z).z * enemySpeed;
+    }
+    if (inputMap['a'] || inputMap['A']) {
+      camera.position.x -= camera.getDirection(BABYLON.Axis.X).x * enemySpeed;
+      camera.position.z -= camera.getDirection(BABYLON.Axis.X).z * enemySpeed;
+    }
+    if (inputMap['d'] || inputMap['D']) {
+      camera.position.x += camera.getDirection(BABYLON.Axis.X).x * enemySpeed;
+      camera.position.z += camera.getDirection(BABYLON.Axis.X).z * enemySpeed;
+    }
+
+    // Jumping
+    if (jump) {
+      camera.position.y += jumpPower;
+
+      if (camera.position.y > 1.7) {
+        jumpPower = -10.05;
+      }
+
+      if (camera.position.y <= 1.7) {
+        camera.position.y = 1.7;
+        jump = false;
+      }
+    }
+
+    // Check for jump key press
+    if (inputMap[' '] && camera.position.y <= 1.7) {
+      jump = true;
+      jumpPower = 10.05;
     }
   });
 
@@ -145,11 +247,11 @@ var createScene = function () {
 
 var scene = createScene();
 
-engine.runRenderLoop(function () {
+engine.runRenderLoop(function() {
   scene.render();
 });
 
-window.addEventListener('resize', function () {
+window.addEventListener('resize', function() {
   engine.resize();
 });
 
